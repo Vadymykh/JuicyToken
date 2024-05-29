@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "commonjs",
+    "strict": true,
+    "esModuleInterop": true,
+    "outDir": "dist",
+    "types": ["mocha", "node"],
+    "rootDirs": ["./scripts", "./test", "./typechain"],
+    "declaration": true
+  },
+  "exclude": ["node_modules"],
+  "include": ["./scripts", "./test", "./typechain-types"],
+  "files": ["./hardhat.config.ts"]
+}

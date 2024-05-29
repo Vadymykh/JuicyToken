@@ -1,0 +1,12 @@
+/node_modules/
+/hide/
+/artifacts/
+/cache/
+/.idea/
+/.env
+data
+
+typechain-types
+
+/subgraph/generated
+/subgraph/build
