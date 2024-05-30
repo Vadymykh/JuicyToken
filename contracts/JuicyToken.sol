@@ -104,7 +104,7 @@ contract JuicyToken is ERC20 {
     function _update(address from, address to, uint256 value) internal virtual override {
         uint112 amount = SafeCast.toUint112(value);
         bool fromWallet = !_accounts[from].isContract && _checkWallet(from);
-        bool toWallet = !_accounts[from].isContract && _checkWallet(to);
+        bool toWallet = !_accounts[to].isContract && _checkWallet(to);
 
         // gas saving
         uint112 _walletBalancesSum = walletBalancesSum;

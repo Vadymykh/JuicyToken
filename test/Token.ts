@@ -5,14 +5,14 @@ import { mine } from "@nomicfoundation/hardhat-network-helpers";
 
 import { JuicyToken as JuicyTokenContract, TransferContract } from "../typechain-types";
 import { toBig, toNum } from "./helpers/bigNumberHelpers";
-import { transferWalletToWallet } from "./helpers/tokenHelpers";
+import { transferContractToWallet, transferWalletToContract, transferWalletToWallet } from "./helpers/tokenHelpers";
 
 const provider = ethers.provider;
 
 let signers: HardhatEthersSigner[];
 let [owner, addr1, addr2, addr3, addr4, addr5, addr6, addr7, addr8, addr9]: HardhatEthersSigner[] = [];
 let JuicyToken: JuicyTokenContract;
-let TransferMock: TransferContract;
+let [TransferMock1, TransferMock2]: TransferContract[] = [];
 
 const INITIAL_SUPPLY = toBig(1000_000);
 const MAXIMUM_TOTAL_SUPPLY = toBig(5000_000);
@@ -59,10 +59,13 @@ describe('Juicy Token', () => {
       expect(await JuicyToken.getCurrentMultiplier()).eq(INITIAL_MULTIPLIER);
     });
 
-    it('should deploy test', async () => {
-      TransferMock = await (await ethers.getContractFactory("TransferContract"))
+    it('should deploy test contracts', async () => {
+      TransferMock1 = await (await ethers.getContractFactory("TransferContract"))
         .deploy(JuicyToken.target);
-      await JuicyToken.waitForDeployment();
+      await TransferMock1.waitForDeployment();
+      TransferMock2 = await (await ethers.getContractFactory("TransferContract"))
+        .deploy(JuicyToken.target);
+      await TransferMock2.waitForDeployment();
     });
 
   });
@@ -72,26 +75,8 @@ describe('Juicy Token', () => {
       await mine(SECONDS_IN_YEAR / BLOCK_DURATION + 1, { interval: BLOCK_DURATION });
     });
 
-    it('should user transfer tokens', async () => {
-      console.log({
-        totalSupply: toNum(await JuicyToken.totalSupply()),
-        distributedRewards: toNum(await JuicyToken.distributedRewards()),
-        totalWalletsBalance: toNum(await JuicyToken.walletBalancesSum()),
-        owner: toNum(await JuicyToken.balanceOf(owner.address)),
-        addr1: toNum(await JuicyToken.balanceOf(addr1.address)),
-        currentMultiplier: await JuicyToken.getCurrentMultiplier(),
-      });
-
+    it('should user transfer tokens wallet-to-wallet', async () => {
       await transferWalletToWallet(JuicyToken, owner, addr1, 1000);
-
-      console.log({
-        totalSupply: toNum(await JuicyToken.totalSupply()),
-        distributedRewards: toNum(await JuicyToken.distributedRewards()),
-        totalWalletsBalance: toNum(await JuicyToken.walletBalancesSum()),
-        owner: toNum(await JuicyToken.balanceOf(owner.address)),
-        addr1: toNum(await JuicyToken.balanceOf(addr1.address)),
-        currentMultiplier: await JuicyToken.getCurrentMultiplier(),
-      });
 
       expect(await JuicyToken.totalSupply())
         .closeTo(toBig(1_500_000), toBig(1000));
@@ -105,6 +90,46 @@ describe('Juicy Token', () => {
 
     it('should time pass', async () => {
       await mine(SECONDS_IN_YEAR / BLOCK_DURATION + 1, { interval: BLOCK_DURATION });
+    });
+
+    it('should user transfer tokens from wallet to contract', async () => {
+      await transferWalletToContract(JuicyToken, owner, TransferMock1, 10000);
+
+      console.log({
+        totalSupply: toNum(await JuicyToken.totalSupply()),
+        distributedRewards: toNum(await JuicyToken.distributedRewards()),
+        totalWalletsBalance: toNum(await JuicyToken.walletBalancesSum()),
+        owner: toNum(await JuicyToken.balanceOf(owner.address)),
+        addr1: toNum(await JuicyToken.balanceOf(addr1.address)),
+        currentMultiplier: await JuicyToken.getCurrentMultiplier(),
+      });
+
+      expect(await JuicyToken.balanceOf(TransferMock1.target))
+        .eq(toBig(10000));
+    });
+
+    it('should time pass', async () => {
+      await mine(1200, { interval: BLOCK_DURATION });
+    });
+
+    it('should user transfer tokens from contract to wallet', async () => {
+      await transferContractToWallet(JuicyToken, TransferMock1, addr1, 1000);
+
+      expect(await JuicyToken.balanceOf(TransferMock1.target))
+        .eq(toBig(9000));
+    });
+
+    it('should user transfer tokens from contract to wallet', async () => {
+      await transferContractToWallet(JuicyToken, TransferMock1, addr2, 1000);
+
+      expect(await JuicyToken.balanceOf(TransferMock1.target))
+        .eq(toBig(8000));
+      expect(await JuicyToken.balanceOf(addr2.address))
+        .eq(toBig(1000));
+    });
+
+    it('should user transfer tokens from wallet to contract', async () => {
+      await transferWalletToContract(JuicyToken, owner, TransferMock1, 2_100_000);
     });
 
   });
