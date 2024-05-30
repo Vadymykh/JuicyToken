@@ -4,7 +4,11 @@
   "description": "Token contract",
   "scripts": {
     "compile": "npx hardhat compile",
-    "test": "npx hardhat test"
+    "test": "npx hardhat test",
+    "format:check": "prettier --check \"*/**/*.{js,ts}\"",
+    "format:write": "prettier --write \"*/**/*.{js,ts}\"",
+    "lint": "eslint \"*/**/*.{js,ts}\"",
+    "lint-fix": "eslint --fix \"*/**/*.{js,ts}\""
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-network-helpers": "^1.0.10",

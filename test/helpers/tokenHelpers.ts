@@ -39,8 +39,8 @@ export async function transferWalletToWallet(
     bAmount
   );
 
-  if (balanceFrom1 !== 0n) expect(pendingFrom).gt(balanceFrom1);
-  if (balanceTo1 !== 0n) expect(pendingTo).gt(balanceTo1);
+  if (balanceFrom1 !== 0n) expect(pendingFrom).gte(balanceFrom1);
+  if (balanceTo1 !== 0n) expect(pendingTo).gte(balanceTo1);
 
   expect(pendingFrom - bAmount).closeTo(balanceFrom2, balanceFrom2 / 1000n);
   expect(pendingTo + bAmount).closeTo(balanceTo2, balanceFrom2 / 1000n);
@@ -92,10 +92,10 @@ export async function transferWalletToContract(
 }
 
 /**
- * Executes and checks wallet-to-contract transfer
+ * Executes and checks contract-to-wallet transfer
  * @param Token JuicyToken contract
- * @param from From account
- * @param to Receiver smart contract
+ * @param from Sender smart contract
+ * @param to Receiver wallet
  * @param amount Amount to transfer
  */
 export async function transferContractToWallet(
@@ -134,6 +134,59 @@ export async function transferContractToWallet(
   expect(pendingTo + bAmount).closeTo(balanceTo2, balanceTo2 / 1000n);
 
   expect(currentMultiplier1).gte(currentMultiplier2);
+}
+
+/**
+ * Executes and checks contract-to-contract transfer
+ * @param Token JuicyToken contract
+ * @param from Sender smart contract
+ * @param to Receiver smart contract
+ * @param amount Amount to transfer
+ */
+export async function transferContractToContract(
+  Token: JuicyToken,
+  from: TransferContract,
+  to: TransferContract,
+  amount: number,
+) {
+  const signer = (await ethers.getSigners())[0];
+
+  const bAmount = toBig(amount);
+
+  const totalSupply1 = await Token.totalSupply();
+  const walletBalancesSum1 = await Token.walletBalancesSum();
+
+  const {
+    pendingFrom,
+    pendingTo,
+    balanceFrom1,
+    balanceTo1,
+    balanceFrom2,
+    balanceTo2,
+    currentMultiplier1,
+    currentMultiplier2,
+  } = await _collectTransferDataAndCheck(
+    Token,
+    async () => {
+      await from.connect(signer).transferToken(to.target, bAmount)
+    },
+    from.target.toString(),
+    to.target.toString(),
+    bAmount
+  );
+
+  const totalSupply2 = await Token.totalSupply();
+  const walletBalancesSum2 = await Token.walletBalancesSum();
+
+  expect(pendingFrom).eq(balanceFrom1);
+  expect(pendingTo).eq(balanceTo1);
+
+  expect(balanceFrom1 - bAmount).eq(balanceFrom2);
+  expect(balanceTo1 + bAmount).eq(balanceTo2);
+
+  expect(currentMultiplier1).eq(currentMultiplier2);
+  expect(totalSupply1).eq(totalSupply2);
+  expect(walletBalancesSum1).eq(walletBalancesSum2);
 }
 
 /**

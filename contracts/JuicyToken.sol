@@ -4,8 +4,6 @@ pragma solidity ^0.8.12;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import "hardhat/console.sol"; // todo fixme
-
 contract JuicyToken is ERC20 {
     uint256 private constant SECONDS_IN_YEAR = 365 * 24 * 60 * 60;
     uint256 private constant PRECISION_FACTOR = 1e12;
@@ -16,8 +14,8 @@ contract JuicyToken is ERC20 {
 
     uint128 private _totalSupply;           // total supply of all minted tokens
     uint128 public accRewardsPerBalance;    // accrued rewards per wallet balance
-    uint112 public distributedRewards;  // all rewards that have not been minted yet
-    uint112 public walletBalancesSum;     // sum of minted tokens that belong to non-contracts
+    uint112 public pendingRewards;          // all rewards that have not been minted yet
+    uint112 public walletBalancesSum;       // sum of minted tokens that belong to non-contracts
     uint32 public lastUpdateTimestamp;
 
     struct AccountData {
@@ -64,7 +62,7 @@ contract JuicyToken is ERC20 {
      * the closer `totalDistributedSupply` to `initialSupply` - the closer `currentMultiplier` will be to `initialMultiplier`
      */
     function getCurrentMultiplier() external view returns (uint256) {
-        uint256 _totalDistributedSupply = _totalSupply + distributedRewards;
+        uint256 _totalDistributedSupply = _totalSupply + pendingRewards;
         return 10_000 + (
             (INITIAL_MULTIPLIER - 10_000)
             * (MAXIMUM_TOTAL_SUPPLY - _totalDistributedSupply)
@@ -124,7 +122,7 @@ contract JuicyToken is ERC20 {
 
             if (minted != 0) {
                 _walletBalancesSum += minted;
-                distributedRewards -= minted;
+                pendingRewards -= minted;
             }
         }
 
@@ -180,7 +178,7 @@ contract JuicyToken is ERC20 {
 
         (uint112 rewardsToDistribute, uint128 accRewardsPerBalanceToAdd) = _getNewRewardsData();
 
-        if (rewardsToDistribute != 0) distributedRewards += rewardsToDistribute;
+        if (rewardsToDistribute != 0) pendingRewards += rewardsToDistribute;
         if (accRewardsPerBalanceToAdd != 0) accRewardsPerBalance += accRewardsPerBalanceToAdd;
 
         lastUpdateTimestamp = uint32(block.timestamp);
@@ -193,8 +191,8 @@ contract JuicyToken is ERC20 {
     function _getNewRewardsData() private view returns (
         uint112 rewardsToDistribute, uint128 accRewardsPerBalanceToAdd
     ) {
-        uint256 _distributedRewards = distributedRewards;
-        uint256 _totalDistributedSupply = _totalSupply + distributedRewards;
+        uint256 _pendingRewards = pendingRewards;
+        uint256 _totalDistributedSupply = _totalSupply + pendingRewards;
         if (_totalDistributedSupply == MAXIMUM_TOTAL_SUPPLY) return (0, 0);
 
         // `currentMultiplier` - multiplier per year in basis points (100% = 10000) for wallet _balances
@@ -207,7 +205,7 @@ contract JuicyToken is ERC20 {
             / (MAXIMUM_TOTAL_SUPPLY - INITIAL_SUPPLY)
         );
         // sum of minted and non-minted wallet balances are multiplied according to time passed since last update
-        uint256 mintedAndDistributedWalletBalances = walletBalancesSum + _distributedRewards;
+        uint256 mintedAndDistributedWalletBalances = walletBalancesSum + _pendingRewards;
         uint256 newRewards = mintedAndDistributedWalletBalances * (currentMultiplier - 10_000)
             * (block.timestamp - lastUpdateTimestamp) / SECONDS_IN_YEAR / 10_000;
 
