@@ -7,14 +7,16 @@ Token, that rewards regular (non-contract) holders. Wallets' balances grow over 
 - Wallet balances grow over time
 - Fixed total supply cap
 
+<img src="./docs/JuicyToken.jpg" alt="JuicyToken description" width="1000px">
+
 # CONTRACT DEPLOYED TO BSC TESTNET
-https://testnet.bscscan.com/address/___________________#code
+https://testnet.bscscan.com/address/0x79656897b7C0BB7a1D0f632012f2E274a1823dCE#code
 <br>
 
 # INSTALL DEPENDENCIES
 
 ```shell
-git clone https://github.com/Vadymykh/JuicyToken
+git clone https://github.com/Vadymykh/JuicyToken.git
 ```
 
 Enter into the main folder.
