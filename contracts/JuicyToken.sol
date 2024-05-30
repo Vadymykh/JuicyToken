@@ -57,12 +57,27 @@ contract JuicyToken is ERC20 {
         _mint(msg.sender, initialSupply);
     }
 
-    /** todo
+    /**
+     * @return multiplier per year in basis points (100% = 10000) for wallet _balances
+     * example: if multiplier is 150%, wallet balances will be increased by 50% per year
+     * the closer `totalDistributedSupply` to `maximumTotalSupply` - the closer `currentMultiplier` will be to x1 (10_000)
+     * the closer `totalDistributedSupply` to `initialSupply` - the closer `currentMultiplier` will be to `initialMultiplier`
+     */
+    function getCurrentMultiplier() external view returns (uint256) {
+        uint256 _totalDistributedSupply = _totalSupply + distributedRewards;
+        return 10_000 + (
+            (INITIAL_MULTIPLIER - 10_000)
+            * (MAXIMUM_TOTAL_SUPPLY - _totalDistributedSupply)
+            / (MAXIMUM_TOTAL_SUPPLY - INITIAL_SUPPLY)
+        );
+    }
+
+    /**
      * @notice Estimates current balance + earned rewards
      * @param account Account address
      * @return Current balance + earned rewards
      */
-    function pendingBalanceOf(address account) external view returns(uint256) {
+    function pendingBalanceOf(address account) external view returns (uint256) {
         bool isWallet = !_accounts[account].isContract && _isWallet(account);
         if (!isWallet) return _accounts[account].balance;
 
@@ -113,7 +128,7 @@ contract JuicyToken is ERC20 {
             }
         }
 
-        if (from != address(0) &&fromWallet) {
+        if (from != address(0) && fromWallet) {
             _walletBalancesSum -= amount;
         }
 
@@ -175,8 +190,8 @@ contract JuicyToken is ERC20 {
      * @return rewardsToDistribute Rewards to distribute
      * @return accRewardsPerBalanceToAdd Accrued rewards per balance to add
      */
-    function _getNewRewardsData() private view returns(
-    uint112 rewardsToDistribute, uint128 accRewardsPerBalanceToAdd
+    function _getNewRewardsData() private view returns (
+        uint112 rewardsToDistribute, uint128 accRewardsPerBalanceToAdd
     ) {
         uint256 _distributedRewards = distributedRewards;
         uint256 _totalDistributedSupply = _totalSupply + distributedRewards;
@@ -211,7 +226,7 @@ contract JuicyToken is ERC20 {
      * @param account Account address
      * @return Amount minted
      */
-    function _mintRewards(address account) internal returns(uint112) {
+    function _mintRewards(address account) internal returns (uint112) {
         uint256 toMint = _accounts[account].balance
             * (accRewardsPerBalance - _accounts[account].lastUpdateAccRewardsPerBalance)
             / PRECISION_FACTOR;

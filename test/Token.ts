@@ -3,15 +3,16 @@ import { expect } from 'chai';
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { mine } from "@nomicfoundation/hardhat-network-helpers";
 
-import { JuicyToken as JuicyTokenContract } from "../typechain-types";
+import { JuicyToken as JuicyTokenContract, TransferContract } from "../typechain-types";
 import { toBig, toNum } from "./helpers/bigNumberHelpers";
-import { transferToWallet } from "./helpers/tokenHelpers";
+import { transferWalletToWallet } from "./helpers/tokenHelpers";
 
 const provider = ethers.provider;
 
 let signers: HardhatEthersSigner[];
 let [owner, addr1, addr2, addr3, addr4, addr5, addr6, addr7, addr8, addr9]: HardhatEthersSigner[] = [];
 let JuicyToken: JuicyTokenContract;
+let TransferMock: TransferContract;
 
 const INITIAL_SUPPLY = toBig(1000_000);
 const MAXIMUM_TOTAL_SUPPLY = toBig(5000_000);
@@ -55,6 +56,13 @@ describe('Juicy Token', () => {
 
       expect(await JuicyToken.totalSupply()).eq(INITIAL_SUPPLY);
       expect(await JuicyToken.walletBalancesSum()).eq(INITIAL_SUPPLY);
+      expect(await JuicyToken.getCurrentMultiplier()).eq(INITIAL_MULTIPLIER);
+    });
+
+    it('should deploy test', async () => {
+      TransferMock = await (await ethers.getContractFactory("TransferContract"))
+        .deploy(JuicyToken.target);
+      await JuicyToken.waitForDeployment();
     });
 
   });
@@ -71,9 +79,10 @@ describe('Juicy Token', () => {
         totalWalletsBalance: toNum(await JuicyToken.walletBalancesSum()),
         owner: toNum(await JuicyToken.balanceOf(owner.address)),
         addr1: toNum(await JuicyToken.balanceOf(addr1.address)),
+        currentMultiplier: await JuicyToken.getCurrentMultiplier(),
       });
 
-      await transferToWallet(JuicyToken, owner, addr1, 1000);
+      await transferWalletToWallet(JuicyToken, owner, addr1, 1000);
 
       console.log({
         totalSupply: toNum(await JuicyToken.totalSupply()),
@@ -81,10 +90,21 @@ describe('Juicy Token', () => {
         totalWalletsBalance: toNum(await JuicyToken.walletBalancesSum()),
         owner: toNum(await JuicyToken.balanceOf(owner.address)),
         addr1: toNum(await JuicyToken.balanceOf(addr1.address)),
+        currentMultiplier: await JuicyToken.getCurrentMultiplier(),
       });
 
+      expect(await JuicyToken.totalSupply())
+        .closeTo(toBig(1_500_000), toBig(1000));
+      expect(await JuicyToken.getCurrentMultiplier())
+        .closeTo(14375, 2);
       expect(await JuicyToken.balanceOf(owner.address))
-        .closeTo(toBig(1_499_000), toBig(0.001));
+        .closeTo(toBig(1_499_000), toBig(1000));
+      expect(await JuicyToken.balanceOf(addr1.address))
+        .eq(toBig(1000));
+    });
+
+    it('should time pass', async () => {
+      await mine(SECONDS_IN_YEAR / BLOCK_DURATION + 1, { interval: BLOCK_DURATION });
     });
 
   });
