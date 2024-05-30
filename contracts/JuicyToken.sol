@@ -18,12 +18,14 @@ contract JuicyToken is ERC20 {
     uint112 public totalWalletsBalance;     // sum of minted tokens that belong to non-contracts
     uint32 public lastUpdateTimestamp;
 
-    struct WalletData {
+    struct AccountData {
         uint128 lastUpdateAccRewardsPerBalance;
-        uint128 balance;
+        uint112 balance;
+        // Edge case attribute. For cases when address received tokens and then smart contract was deployed to this address
+        bool isContract;
     }
 
-    mapping(address account => WalletData) private _wallets;
+    mapping(address account => AccountData) private _accounts;
 
     /**
      * @param initialSupply Initial supply to mint
@@ -60,8 +62,8 @@ contract JuicyToken is ERC20 {
      */
     function _update(address from, address to, uint256 value) internal virtual override {
         uint112 amount = SafeCast.toUint112(value);
-        bool fromWallet = isWallet(from);
-        bool toWallet = isWallet(to);
+        bool fromWallet = !_accounts[from].isContract && checkWallet(from);
+        bool toWallet = !_accounts[from].isContract && checkWallet(to);
 
         // gas saving
         uint112 _totalWalletsBalance = totalWalletsBalance;
@@ -99,13 +101,13 @@ contract JuicyToken is ERC20 {
             // Overflow check required: The rest of the code assumes that totalSupply never overflows
             _totalSupply += amount;
         } else {
-            uint128 fromBalance = _wallets[from].balance;
+            uint112 fromBalance = _accounts[from].balance;
             if (fromBalance < amount) {
                 revert ERC20InsufficientBalance(from, fromBalance, amount);
             }
             unchecked {
             // Overflow not possible: amount <= fromBalance <= totalSupply.
-                _wallets[from].balance = fromBalance - amount;
+                _accounts[from].balance = fromBalance - amount;
             }
         }
 
@@ -117,7 +119,7 @@ contract JuicyToken is ERC20 {
         } else {
             unchecked {
             // Overflow not possible: balance + amount is at most totalSupply, which we know fits into a uint256.
-                _wallets[to].balance += amount;
+                _accounts[to].balance += amount;
             }
         }
 
@@ -170,10 +172,10 @@ contract JuicyToken is ERC20 {
      * @return Amount minted
      */
     function _mintRewards(address account) internal returns(uint112) {
-        uint256 toMint = _wallets[account].balance
-            * (accRewardsPerBalance - _wallets[account].lastUpdateAccRewardsPerBalance)
+        uint256 toMint = _accounts[account].balance
+            * (accRewardsPerBalance - _accounts[account].lastUpdateAccRewardsPerBalance)
             / PRECISION_FACTOR;
-        _wallets[account].lastUpdateAccRewardsPerBalance = accRewardsPerBalance;
+        _accounts[account].lastUpdateAccRewardsPerBalance = accRewardsPerBalance;
 
         if (toMint != 0) {
             _mint(account, toMint);
@@ -184,15 +186,26 @@ contract JuicyToken is ERC20 {
 
     /**
      * @notice Checks if address is a wallet (not a smart contract)
-     * @param _addr Address to check
-     * @return isContract `true` - _addr is smart contract address
+     * @param account Address to check
+     * @return isWallet `true` - account is wallet address
+     * @dev Marks account as `isContract`.
      */
-    function isWallet(address _addr) internal view returns (bool isContract){
+    function checkWallet(address account) internal returns (bool isWallet){
         uint32 size;
         assembly {
-            size := extcodesize(_addr)
+            size := extcodesize(account)
         }
-        return (size == 0);
+        isWallet = (size == 0);
+
+        // account is smart contract
+        if (!isWallet) {
+            _accounts[account].isContract = true;
+            // edge case
+            // if address became smart contract we don't want to distribute rewards for it anymore
+            if (_accounts[account].balance != 0) {
+                totalWalletsBalance -= _accounts[account].balance;
+            }
+        }
     }
 
     /**
@@ -206,6 +219,6 @@ contract JuicyToken is ERC20 {
      * @dev See {IERC20-balanceOf}.
      */
     function balanceOf(address account) public view virtual override returns (uint256) {
-        return _wallets[account].balance;
+        return _accounts[account].balance;
     }
 }
