@@ -151,4 +151,13 @@ describe("Juicy Token", () => {
       expect(await JuicyToken.pendingRewards()).closeTo(0, toBig(1));
     });
   });
+  describe("Reverts", () => {
+
+    it("revert test example", async () => {
+      await expect(JuicyToken.connect(addr1).transfer(ethers.ZeroAddress, toBig(1)))
+        .to.be.revertedWithCustomError(JuicyToken, 'ERC20InvalidReceiver')
+        .withArgs(ethers.ZeroAddress);
+    });
+
+  });
 });

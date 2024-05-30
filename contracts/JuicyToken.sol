@@ -85,11 +85,11 @@ contract JuicyToken is ERC20 {
             _accRewardsPerBalance += accRewardsPerBalanceToAdd;
         }
 
-        uint256 pendingRewards = _accounts[account].balance
+        uint256 _pendingRewards = _accounts[account].balance
             * (_accRewardsPerBalance - _accounts[account].lastUpdateAccRewardsPerBalance)
             / PRECISION_FACTOR;
 
-        return _accounts[account].balance + pendingRewards;
+        return _accounts[account].balance + _pendingRewards;
     }
 
     /**
