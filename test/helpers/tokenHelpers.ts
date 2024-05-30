@@ -16,7 +16,7 @@ export async function transferWalletToWallet(
   Token: JuicyToken,
   from: HardhatEthersSigner,
   to: HardhatEthersSigner,
-  amount: number,
+  amount: number
 ) {
   const bAmount = toBig(amount);
 
@@ -32,11 +32,10 @@ export async function transferWalletToWallet(
   } = await _collectTransferDataAndCheck(
     Token,
     async () => {
-      await Token.connect(from).transfer(to.address, bAmount)
+      await Token.connect(from).transfer(to.address, bAmount);
     },
     from.address,
-    to.address,
-    bAmount
+    to.address
   );
 
   if (balanceFrom1 !== 0n) expect(pendingFrom).gte(balanceFrom1);
@@ -59,7 +58,7 @@ export async function transferWalletToContract(
   Token: JuicyToken,
   from: HardhatEthersSigner,
   to: BaseContract,
-  amount: number,
+  amount: number
 ) {
   const bAmount = toBig(amount);
 
@@ -75,11 +74,10 @@ export async function transferWalletToContract(
   } = await _collectTransferDataAndCheck(
     Token,
     async () => {
-      await Token.connect(from).transfer(to.target, bAmount)
+      await Token.connect(from).transfer(to.target, bAmount);
     },
     from.address,
-    to.target.toString(),
-    bAmount
+    to.target.toString()
   );
 
   if (balanceFrom1 !== 0n) expect(pendingFrom).gt(balanceFrom1);
@@ -102,7 +100,7 @@ export async function transferContractToWallet(
   Token: JuicyToken,
   from: TransferContract,
   to: HardhatEthersSigner,
-  amount: number,
+  amount: number
 ) {
   const signer = (await ethers.getSigners())[0];
 
@@ -120,11 +118,10 @@ export async function transferContractToWallet(
   } = await _collectTransferDataAndCheck(
     Token,
     async () => {
-      await from.connect(signer).transferToken(to.address, bAmount)
+      await from.connect(signer).transferToken(to.address, bAmount);
     },
     from.target.toString(),
-    to.address,
-    bAmount
+    to.address
   );
 
   expect(pendingFrom).eq(balanceFrom1);
@@ -147,7 +144,7 @@ export async function transferContractToContract(
   Token: JuicyToken,
   from: TransferContract,
   to: TransferContract,
-  amount: number,
+  amount: number
 ) {
   const signer = (await ethers.getSigners())[0];
 
@@ -168,11 +165,10 @@ export async function transferContractToContract(
   } = await _collectTransferDataAndCheck(
     Token,
     async () => {
-      await from.connect(signer).transferToken(to.target, bAmount)
+      await from.connect(signer).transferToken(to.target, bAmount);
     },
     from.target.toString(),
-    to.target.toString(),
-    bAmount
+    to.target.toString()
   );
 
   const totalSupply2 = await Token.totalSupply();
@@ -195,14 +191,12 @@ export async function transferContractToContract(
  * @param callback
  * @param from From account
  * @param to To account
- * @param bAmount Amount to transfer
  */
 async function _collectTransferDataAndCheck(
   Token: JuicyToken,
   callback: () => Promise<void>,
   from: string,
-  to: string,
-  bAmount: bigint,
+  to: string
 ) {
   const pendingFrom = await Token.pendingBalanceOf(from);
   const pendingTo = await Token.pendingBalanceOf(to);
@@ -221,8 +215,14 @@ async function _collectTransferDataAndCheck(
   expect(currentMultiplier2).gte(10_000);
 
   return {
-    pendingFrom, pendingTo, balanceFrom1, balanceTo1, balanceFrom2, balanceTo2,
-    currentMultiplier1, currentMultiplier2,
+    pendingFrom,
+    pendingTo,
+    balanceFrom1,
+    balanceTo1,
+    balanceFrom2,
+    balanceTo2,
+    currentMultiplier1,
+    currentMultiplier2,
   };
 }
 
@@ -230,9 +230,7 @@ async function _collectTransferDataAndCheck(
  * Collects sum of wallet balances
  * @param Token JuicyToken contract
  */
-export async function getWalletBalancesSum(
-  Token: JuicyToken
-) {
+export async function getWalletBalancesSum(Token: JuicyToken) {
   const signers = await ethers.getSigners();
 
   let sum = 0n;

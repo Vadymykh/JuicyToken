@@ -1,0 +1,14 @@
+coverage/lcov-report/*.js
+utils/generated/*.ts
+/node_modules/
+/hide/
+/artifacts/
+/cache/
+/.idea/
+/.env
+/data/
+
+typechain-types
+
+/subgraph/generated
+/subgraph/build
