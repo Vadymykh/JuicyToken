@@ -4,6 +4,8 @@ pragma solidity ^0.8.12;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
+import "hardhat/console.sol"; // todo fixme
+
 contract JuicyToken is ERC20 {
     uint256 private constant SECONDS_IN_YEAR = 365 * 24 * 60 * 60;
     uint256 private constant PRECISION_FACTOR = 1e12;
@@ -14,8 +16,8 @@ contract JuicyToken is ERC20 {
 
     uint128 private _totalSupply;           // total supply of all minted tokens
     uint128 public accRewardsPerBalance;    // accrued rewards per wallet balance
-    uint112 public totalDistributedSupply;  // `_totalSupply` + all rewards that have not been minted yet
-    uint112 public totalWalletsBalance;     // sum of minted tokens that belong to non-contracts
+    uint112 public distributedRewards;  // all rewards that have not been minted yet
+    uint112 public walletBalancesSum;     // sum of minted tokens that belong to non-contracts
     uint32 public lastUpdateTimestamp;
 
     struct AccountData {
@@ -50,7 +52,31 @@ contract JuicyToken is ERC20 {
         INITIAL_SUPPLY = initialSupply;
         MAXIMUM_TOTAL_SUPPLY = maximumTotalSupply;
 
+        lastUpdateTimestamp = uint32(block.timestamp);
+
         _mint(msg.sender, initialSupply);
+    }
+
+    /** todo
+     * @notice Estimates current balance + earned rewards
+     * @param account Account address
+     * @return Current balance + earned rewards
+     */
+    function pendingBalanceOf(address account) external view returns(uint256) {
+        bool isWallet = !_accounts[account].isContract && _isWallet(account);
+        if (!isWallet) return _accounts[account].balance;
+
+        uint128 _accRewardsPerBalance = accRewardsPerBalance;
+        if (block.timestamp > lastUpdateTimestamp && walletBalancesSum != 0) {
+            (, uint128 accRewardsPerBalanceToAdd) = _getNewRewardsData();
+            _accRewardsPerBalance += accRewardsPerBalanceToAdd;
+        }
+
+        uint256 pendingRewards = _accounts[account].balance
+            * (_accRewardsPerBalance - _accounts[account].lastUpdateAccRewardsPerBalance)
+            / PRECISION_FACTOR;
+
+        return _accounts[account].balance + pendingRewards;
     }
 
     /**
@@ -62,11 +88,11 @@ contract JuicyToken is ERC20 {
      */
     function _update(address from, address to, uint256 value) internal virtual override {
         uint112 amount = SafeCast.toUint112(value);
-        bool fromWallet = !_accounts[from].isContract && checkWallet(from);
-        bool toWallet = !_accounts[from].isContract && checkWallet(to);
+        bool fromWallet = !_accounts[from].isContract && _checkWallet(from);
+        bool toWallet = !_accounts[from].isContract && _checkWallet(to);
 
         // gas saving
-        uint112 _totalWalletsBalance = totalWalletsBalance;
+        uint112 _walletBalancesSum = walletBalancesSum;
 
         // if it's not mint or burn - try mint rewards
         if (from != address(0) && to != address(0)) {
@@ -82,19 +108,20 @@ contract JuicyToken is ERC20 {
             }
 
             if (minted != 0) {
-                _totalWalletsBalance += minted;
+                _walletBalancesSum += minted;
+                distributedRewards -= minted;
             }
         }
 
-        if (fromWallet) {
-            _totalWalletsBalance -= amount;
+        if (from != address(0) &&fromWallet) {
+            _walletBalancesSum -= amount;
         }
 
-        if (toWallet) {
-            _totalWalletsBalance += amount;
+        if (to != address(0) && toWallet) {
+            _walletBalancesSum += amount;
         }
 
-        totalWalletsBalance = _totalWalletsBalance;
+        walletBalancesSum = _walletBalancesSum;
 
         // updated original math
         if (from == address(0)) {
@@ -131,13 +158,29 @@ contract JuicyToken is ERC20 {
      */
     function _updateAccRewardsPerBalance() private {
         if (block.timestamp <= lastUpdateTimestamp) return;
-        if (totalWalletsBalance == 0) {
+        if (walletBalancesSum == 0) {
             lastUpdateTimestamp = uint32(block.timestamp);
             return;
         }
 
-        uint256 _totalDistributedSupply = totalDistributedSupply;
-        if (_totalDistributedSupply == MAXIMUM_TOTAL_SUPPLY) return;
+        (uint112 rewardsToDistribute, uint128 accRewardsPerBalanceToAdd) = _getNewRewardsData();
+
+        if (rewardsToDistribute != 0) distributedRewards += rewardsToDistribute;
+        if (accRewardsPerBalanceToAdd != 0) accRewardsPerBalance += accRewardsPerBalanceToAdd;
+
+        lastUpdateTimestamp = uint32(block.timestamp);
+    }
+
+    /**
+     * @return rewardsToDistribute Rewards to distribute
+     * @return accRewardsPerBalanceToAdd Accrued rewards per balance to add
+     */
+    function _getNewRewardsData() private view returns(
+    uint112 rewardsToDistribute, uint128 accRewardsPerBalanceToAdd
+    ) {
+        uint256 _distributedRewards = distributedRewards;
+        uint256 _totalDistributedSupply = _totalSupply + distributedRewards;
+        if (_totalDistributedSupply == MAXIMUM_TOTAL_SUPPLY) return (0, 0);
 
         // `currentMultiplier` - multiplier per year in basis points (100% = 10000) for wallet _balances
         // example: if multiplier is 150%, wallet balances will be increased by 50% per year
@@ -149,7 +192,7 @@ contract JuicyToken is ERC20 {
             / (MAXIMUM_TOTAL_SUPPLY - INITIAL_SUPPLY)
         );
         // sum of minted and non-minted wallet balances are multiplied according to time passed since last update
-        uint256 mintedAndDistributedWalletBalances = totalWalletsBalance + (_totalDistributedSupply - _totalSupply);
+        uint256 mintedAndDistributedWalletBalances = walletBalancesSum + _distributedRewards;
         uint256 newRewards = mintedAndDistributedWalletBalances * (currentMultiplier - 10_000)
             * (block.timestamp - lastUpdateTimestamp) / SECONDS_IN_YEAR / 10_000;
 
@@ -160,10 +203,7 @@ contract JuicyToken is ERC20 {
         }
 
         // no overflow possible since we made sure amounts don't exceed maximum
-        totalDistributedSupply = uint112(newTotalDistributedSupply);
-        accRewardsPerBalance += uint112(newRewards * PRECISION_FACTOR / mintedAndDistributedWalletBalances);
-
-        lastUpdateTimestamp = uint32(block.timestamp);
+        return (uint112(newRewards), uint128(newRewards * PRECISION_FACTOR / mintedAndDistributedWalletBalances));
     }
 
     /**
@@ -190,12 +230,8 @@ contract JuicyToken is ERC20 {
      * @return isWallet `true` - account is wallet address
      * @dev Marks account as `isContract`.
      */
-    function checkWallet(address account) internal returns (bool isWallet){
-        uint32 size;
-        assembly {
-            size := extcodesize(account)
-        }
-        isWallet = (size == 0);
+    function _checkWallet(address account) internal returns (bool isWallet){
+        isWallet = _isWallet(account);
 
         // account is smart contract
         if (!isWallet) {
@@ -203,9 +239,22 @@ contract JuicyToken is ERC20 {
             // edge case
             // if address became smart contract we don't want to distribute rewards for it anymore
             if (_accounts[account].balance != 0) {
-                totalWalletsBalance -= _accounts[account].balance;
+                walletBalancesSum -= _accounts[account].balance;
             }
         }
+    }
+
+    /**
+     * @notice Checks if address is a wallet (not a smart contract)
+     * @param account Address to check
+     * @return isWallet `true` - account is wallet address
+     */
+    function _isWallet(address account) internal view returns (bool isWallet){
+        uint32 size;
+        assembly {
+            size := extcodesize(account)
+        }
+        isWallet = (size == 0);
     }
 
     /**
